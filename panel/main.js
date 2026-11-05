@@ -859,13 +859,13 @@
           listener(snapshot);
       }),
       onRunningShells: (scope, listener) => subscribeShells(scope, listener),
-      readShellOutput: async (shellId, options2) => {
+      readShellOutput: async (shellId, options) => {
         requireIdentity(shellId, GUEST_SHELL_ID_MAX);
-        const cursor = options2?.cursor;
+        const cursor = options?.cursor;
         if (cursor !== undefined && (!Number.isInteger(cursor) || cursor < 0)) {
           throw new HostRequestError("HOST_REJECTED", "Shell output cursor must be a non-negative integer.");
         }
-        const tailBytes = options2?.tailBytes;
+        const tailBytes = options?.tailBytes;
         if (tailBytes !== undefined && (!Number.isInteger(tailBytes) || tailBytes < 1 || tailBytes > GUEST_SHELL_OUTPUT_TAIL_MAX)) {
           throw new HostRequestError("HOST_REJECTED", `Shell output tailBytes must be an integer between 1 and ${GUEST_SHELL_OUTPUT_TAIL_MAX}.`);
         }
@@ -888,30 +888,30 @@
         await request({ ...envelope, type: "open-session", id: nextId(ids), payload: { sessionId } });
       },
       storage: {
-        get: async (key, options2) => {
-          const scope = deviceStorageScope(options2);
+        get: async (key, options) => {
+          const scope = deviceStorageScope(options);
           const payload = { op: "get", key };
           if (scope)
             payload.scope = scope;
           const result = await storage(payload);
           return result.op === "get" && result.found ? result.value : undefined;
         },
-        set: async (key, value, options2) => {
-          const scope = deviceStorageScope(options2);
+        set: async (key, value, options) => {
+          const scope = deviceStorageScope(options);
           const payload = { op: "set", key, value };
           if (scope)
             payload.scope = scope;
           await storage(payload);
         },
-        delete: async (key, options2) => {
-          const scope = deviceStorageScope(options2);
+        delete: async (key, options) => {
+          const scope = deviceStorageScope(options);
           const payload = { op: "delete", key };
           if (scope)
             payload.scope = scope;
           await storage(payload);
         },
-        keys: async (options2) => {
-          const scope = deviceStorageScope(options2);
+        keys: async (options) => {
+          const scope = deviceStorageScope(options);
           const payload = { op: "keys" };
           if (scope)
             payload.scope = scope;
@@ -1865,12 +1865,12 @@ ${GUEST_UI_LOOK_CSS}`;
   var mountTextField = (root, initial) => {
     ensureStyle(UI_CSS);
     let props = initial;
-    const field2 = el("label", "oc-sdk oc-sdk-field");
+    const field = el("label", "oc-sdk oc-sdk-field");
     const caption = el("span", "oc-sdk-field-label");
     const input = props.multiline ? el("textarea", "oc-sdk-input") : el("input", "oc-sdk-input");
     const note = el("span", "oc-sdk-field-note");
-    field2.append(caption, input, note);
-    root.append(field2);
+    field.append(caption, input, note);
+    root.append(field);
     const paint = () => {
       setText(caption, props.label);
       caption.hidden = !props.label;
@@ -1886,7 +1886,7 @@ ${GUEST_UI_LOOK_CSS}`;
       setAttr(input, "placeholder", props.placeholder);
       input.dataset.mono = props.mono ? "true" : "false";
       const invalid = Boolean(props.error);
-      field2.dataset.invalid = invalid ? "true" : "false";
+      field.dataset.invalid = invalid ? "true" : "false";
       input.setAttribute("aria-invalid", invalid ? "true" : "false");
       const text = props.error ?? props.helper ?? "";
       setText(note, text);
@@ -1904,7 +1904,7 @@ ${GUEST_UI_LOOK_CSS}`;
       },
       dispose: () => {
         input.removeEventListener("input", onInput);
-        field2.remove();
+        field.remove();
       }
     };
   };
@@ -2305,8 +2305,8 @@ ${GUEST_UI_LOOK_CSS}`;
   };
   var mountCheckbox = (root, initial) => mountToggle(root, initial, "checkbox");
   // node_modules/@openchamber/sdk/dist/ui/badge.js
-  var applyTone = (node, tone2) => {
-    setAttr(node, "data-tone", tone2 && tone2 !== "neutral" ? tone2 : null);
+  var applyTone = (node, tone) => {
+    setAttr(node, "data-tone", tone && tone !== "neutral" ? tone : null);
   };
   var mountBadge = (root, initial) => {
     ensureStyle(UI_CSS);
@@ -2462,10 +2462,10 @@ ${GUEST_UI_LOOK_CSS}`;
     let props = initial;
     const node = el("span", "oc-sdk oc-sdk-spinner");
     node.setAttribute("role", "status");
-    const ring2 = el("span", "oc-sdk-spinner-ring");
-    ring2.setAttribute("aria-hidden", "true");
+    const ring = el("span", "oc-sdk-spinner-ring");
+    ring.setAttribute("aria-hidden", "true");
     const label = el("span");
-    node.append(ring2, label);
+    node.append(ring, label);
     root.append(node);
     const paint = () => {
       node.dataset.size = props.size ?? "default";
@@ -2717,36 +2717,36 @@ ${GUEST_UI_LOOK_CSS}`;
     node.innerHTML = ICONS[name];
     return node;
   }
-  function mountButtonWithIcon(parent, props, icon2) {
+  function mountButtonWithIcon(parent, props, icon) {
     const handle = mountButton(parent, props);
-    if (icon2) {
-      const button2 = parent.lastElementChild;
-      button2?.prepend(svgIcon(icon2, "canvas-control-icon"));
+    if (icon) {
+      const button = parent.lastElementChild;
+      button?.prepend(svgIcon(icon, "canvas-control-icon"));
     }
     return handle;
   }
-  function iconMenu(parent, props, icon2 = "ellipsis") {
+  function iconMenu(parent, props, icon = "ellipsis") {
     const handle = mountMenu(parent, props);
-    const button2 = parent.lastElementChild?.querySelector?.("button");
-    button2?.prepend(svgIcon(icon2, "canvas-control-icon"));
+    const button = parent.lastElementChild?.querySelector?.("button");
+    button?.prepend(svgIcon(icon, "canvas-control-icon"));
     return handle;
   }
-  function sectionHeading(parent, icon2, label, meta) {
+  function sectionHeading(parent, icon, label, meta) {
     const heading = element("header", parent, "canvas-section-heading");
-    heading.append(svgIcon(icon2, "canvas-section-icon"));
+    heading.append(svgIcon(icon, "canvas-section-icon"));
     element("h2", heading, "", label);
     if (meta)
       element("span", heading, "canvas-section-meta", meta);
     return heading;
   }
-  function metaItem(parent, icon2, text) {
+  function metaItem(parent, icon, text) {
     const item = element("span", parent, "canvas-meta-item");
-    item.append(svgIcon(icon2, "canvas-status-icon"), document.createTextNode(text));
+    item.append(svgIcon(icon, "canvas-status-icon"), document.createTextNode(text));
     return item;
   }
-  function groupHeading(parent, icon2, label) {
+  function groupHeading(parent, icon, label) {
     const heading = element("header", parent, "canvas-list-heading");
-    heading.append(svgIcon(icon2, "canvas-list-icon"), element("span", heading, "", label));
+    heading.append(svgIcon(icon, "canvas-list-icon"), element("span", heading, "", label));
     return heading;
   }
   function dispose(handles) {
@@ -2779,13 +2779,13 @@ ${GUEST_UI_LOOK_CSS}`;
       await host.toast({ kind: "error", message: message(error) });
     }
   }
-  function action(parent, handles, label, work, variant = "ghost", size = "sm", icon2) {
-    const button2 = mountButtonWithIcon(parent, { label, variant, size, onClick: () => {
-      button2.update({ loading: true });
-      run(work).finally(() => button2.update({ loading: false }));
-    } }, icon2);
-    handles.push(button2);
-    return button2;
+  function action(parent, handles, label, work, variant = "ghost", size = "sm", icon) {
+    const button = mountButtonWithIcon(parent, { label, variant, size, onClick: () => {
+      button.update({ loading: true });
+      run(work).finally(() => button.update({ loading: false }));
+    } }, icon);
+    handles.push(button);
+    return button;
   }
   async function copy(text, label) {
     await host.writeClipboard(text);
@@ -3011,9 +3011,9 @@ ${GUEST_UI_LOOK_CSS}`;
     errorSlot.hidden = true;
     const errorBanner = mountBanner(errorSlot, { tone: "error", title: "Could not move artifact" });
     dialogHandles.push(errorBanner);
-    const actions2 = element("div", modal, "canvas-actions");
-    dialogHandles.push(mountButton(actions2, { label: "Cancel", variant: "outline", size: "sm", onClick: closeDialog }));
-    const remove = mountButton(actions2, { label: "Move to trash", variant: "destructive", size: "sm", onClick: () => {
+    const actions = element("div", modal, "canvas-actions");
+    dialogHandles.push(mountButton(actions, { label: "Cancel", variant: "outline", size: "sm", onClick: closeDialog }));
+    const remove = mountButton(actions, { label: "Move to trash", variant: "destructive", size: "sm", onClick: () => {
       remove.update({ loading: true });
       (async () => {
         try {
@@ -3279,8 +3279,8 @@ ${GUEST_UI_LOOK_CSS}`;
     } } });
     const spinnerRoot = element("div", node);
     const spinner = mountSpinner(spinnerRoot, { label: "Loading feedback" });
-    const actions2 = element("div", node, "canvas-actions");
-    node.insertBefore(actions2, rows);
+    const actions = element("div", node, "canvas-actions");
+    node.insertBefore(actions, rows);
     const count = element("p", node, "canvas-muted");
     const selected = new Set;
     const checkboxes = new Map;
@@ -3289,7 +3289,7 @@ ${GUEST_UI_LOOK_CSS}`;
     let signature = "";
     let requestId = 0;
     let disposed = false;
-    const add = action(actions2, handles, "Add feedback to chat", async () => {
+    const add = action(actions, handles, "Add feedback to chat", async () => {
       const chosen = records.filter((record) => selected.has(record.id));
       if (!chosen.length)
         return;
@@ -3315,7 +3315,7 @@ ${JSON.stringify(record.data, null, 2)}`).join(`
       await load(false);
       await refresh();
     }, "outline", "sm", "message");
-    const more = action(actions2, handles, "Load more feedback", () => load(true), "ghost", "sm");
+    const more = action(actions, handles, "Load more feedback", () => load(true), "ghost", "sm");
     add.update({ disabled: true });
     handles.push(notice, spinner);
     async function load(append) {
@@ -3337,7 +3337,7 @@ ${JSON.stringify(record.data, null, 2)}`).join(`
         }
         records = collected;
         total = Number.isFinite(expected) ? expected : records.length;
-        actions2.hidden = total === 0;
+        actions.hidden = total === 0;
         count.hidden = total === 0;
         count.textContent = `${records.length} of ${total} responses`;
         dispose(rowsHandles);
@@ -3375,7 +3375,7 @@ ${JSON.stringify(record.data, null, 2)}`).join(`
       }
     }
     return { node, sync: () => {
-      const item = artifacts.find((item2) => item2.id === id);
+      const item = artifacts.find((item) => item.id === id);
       const next = JSON.stringify([item?.feedbackCount, item?.pendingFeedbackCount]);
       if (next !== signature) {
         signature = next;
@@ -3434,16 +3434,16 @@ ${JSON.stringify(record.data, null, 2)}`).join(`
     const spinner = mountSpinner(spinnerRoot, { label: "Loading artifact" });
     const content = element("div", node, "canvas-detail-content");
     const overview = element("section", content, "canvas-section canvas-overview");
-    const actions2 = element("div", overview, "canvas-actions");
-    action(actions2, handles, remote ? "Copy URL" : "Open", async () => {
+    const actions = element("div", overview, "canvas-actions");
+    action(actions, handles, remote ? "Copy URL" : "Open", async () => {
       if (remote)
         await copyUrl(id);
       else
         await openArtifact(id);
     }, "default", "default", "arrow-up-right");
     if (!remote)
-      action(actions2, handles, "Copy URL", () => copyUrl(id), "outline", "sm", "copy");
-    action(actions2, handles, "Export", async () => {
+      action(actions, handles, "Copy URL", () => copyUrl(id), "outline", "sm", "copy");
+    action(actions, handles, "Export", async () => {
       if (detail?.id === id)
         await exportArtifact(detail);
     }, "outline", "sm", "download");
@@ -3473,7 +3473,7 @@ ${JSON.stringify(record.data, null, 2)}`).join(`
     const instructions = element("section", content, "canvas-section");
     instructions.append(sectionHeading(instructions, "message", "Ask the agent"));
     const instruction = element("div", instructions, "canvas-instruction");
-    const field2 = mountTextField(instruction, {
+    const field = mountTextField(instruction, {
       label: "What should change?",
       value: draft,
       placeholder: "Describe the change",
@@ -3483,7 +3483,7 @@ ${JSON.stringify(record.data, null, 2)}`).join(`
       onChange: (value) => {
         draft = value;
         drafts.set(id, value);
-        field2.update({ value });
+        field.update({ value });
         add.update({ disabled: !value.trim() });
       }
     });
@@ -3507,7 +3507,7 @@ Read it with canvas_read first, then update it with canvas_update and the curren
     add.update({ disabled: !draft.trim() });
     const feedback = mountFeedback(content, id);
     content.append(instructions, feedback.node, versions, technical);
-    handles.push(error, spinner, menu, field2, technicalToggle);
+    handles.push(error, spinner, menu, field, technicalToggle);
     function update() {
       const meta = detail?.id === id ? detail : null;
       spinnerRoot.hidden = meta !== null || detailError !== null;
@@ -3574,10 +3574,10 @@ Read it with canvas_read first, then update it with canvas_update and the curren
             element("p", info, "canvas-muted", restored < 0 ? "Restored version" : `Restored from v${restored + 1}`);
           }
           if (version.id !== meta.currentVersion) {
-            const actions3 = element("div", row, "canvas-version-actions");
+            const actions = element("div", row, "canvas-version-actions");
             if (!remote)
-              action(actions3, versionHandles, `Open v${index + 1}`, () => openArtifact(id, version.id), "ghost", "xs", "arrow-up-right");
-            action(actions3, versionHandles, `Restore v${index + 1}`, () => restoreVersion(meta, version.id), "outline", "xs", "refresh");
+              action(actions, versionHandles, `Open v${index + 1}`, () => openArtifact(id, version.id), "ghost", "xs", "arrow-up-right");
+            action(actions, versionHandles, `Restore v${index + 1}`, () => restoreVersion(meta, version.id), "outline", "xs", "refresh");
           }
         }
       }
@@ -3598,7 +3598,7 @@ Read it with canvas_read first, then update it with canvas_update and the curren
       node,
       update,
       syncDraft: () => {
-        field2.update({ value: drafts.get(id) ?? "" });
+        field.update({ value: drafts.get(id) ?? "" });
         add.update({ disabled: !(drafts.get(id) ?? "").trim() });
       },
       dispose: () => {

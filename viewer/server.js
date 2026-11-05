@@ -241,7 +241,7 @@ async function readJson(filePath) {
   }
 }
 function sleep(milliseconds) {
-  return new Promise((resolve2) => setTimeout(resolve2, milliseconds));
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 // src/store/id.ts
@@ -514,28 +514,28 @@ function isJsonValue(value, depth = 0) {
 function jsonByteLength(value) {
   return Buffer.byteLength(JSON.stringify(value) ?? "null", "utf8");
 }
-function requireString(record2, key, maxLength) {
-  const value = record2[key];
+function requireString(record, key, maxLength) {
+  const value = record[key];
   if (typeof value !== "string" || value.length === 0 || value.length > maxLength) {
     fail(`${key} must be a string of 1 to ${maxLength} characters`);
   }
   return value;
 }
-function requireInteger(record2, key, minimum, maximum) {
-  const value = record2[key];
+function requireInteger(record, key, minimum, maximum) {
+  const value = record[key];
   if (typeof value !== "number" || !Number.isInteger(value) || value < minimum || value > maximum) {
     fail(`${key} must be an integer from ${minimum} to ${maximum}`);
   }
   return value;
 }
-function requireBoolean(record2, key) {
-  const value = record2[key];
+function requireBoolean(record, key) {
+  const value = record[key];
   if (typeof value !== "boolean")
     fail(`${key} must be a boolean`);
   return value;
 }
-function nullableString(record2, key, maxLength) {
-  const value = record2[key];
+function nullableString(record, key, maxLength) {
+  const value = record[key];
   if (value === null)
     return null;
   if (typeof value !== "string" || value.length === 0 || value.length > maxLength) {
@@ -882,8 +882,8 @@ class ArtifactStore {
       if (existing !== null) {
         return withArtifactLock(this.lockPath(existing.id), async () => {
           const current = await this.getMeta(existing.id);
-          const manifest2 = await this.readManifest(existing.id, current.currentVersion);
-          if (manifest2.entry === entry && await this.hasSameFiles(existing.id, current.currentVersion, files)) {
+          const manifest = await this.readManifest(existing.id, current.currentVersion);
+          if (manifest.entry === entry && await this.hasSameFiles(existing.id, current.currentVersion, files)) {
             if (input.baseVersion !== undefined)
               this.assertBaseVersion(current, input.baseVersion, "metadata");
             const meta = { ...current, title, tags: input.tags === undefined ? current.tags : tags, updatedAt: this.now().toISOString() };
@@ -1025,8 +1025,8 @@ class ArtifactStore {
     if (!meta.versions.some((entry) => entry.id === versionId)) {
       throw new StoreError("NOT_FOUND", "Version not found");
     }
-    const manifest2 = await this.readManifest(id, versionId);
-    return { meta, version: versionId, manifest: manifest2 };
+    const manifest = await this.readManifest(id, versionId);
+    return { meta, version: versionId, manifest };
   }
   async readVersion(id, version) {
     const result = await this.read(id, version);
@@ -1039,12 +1039,12 @@ class ArtifactStore {
   }
   async readFile(id, version, filePath) {
     const result = await this.read(id, version);
-    const record2 = result.manifest.files.find((file) => file.path === filePath);
-    if (record2 === undefined) {
+    const record = result.manifest.files.find((file) => file.path === filePath);
+    if (record === undefined) {
       throw new StoreError("PATH_NOT_FOUND", "File not found in this version");
     }
     const versionDir = resolveVersionDir(this.root, id, result.version);
-    return this.readFileAt(versionDir, record2.path);
+    return this.readFileAt(versionDir, record.path);
   }
   async getMeta(id) {
     await this.ensureInit();
@@ -1105,7 +1105,7 @@ class ArtifactStore {
       for (const value of meta.tags)
         tags.add(value);
       const feedback = filter.trash ? [] : await this.allFeedback(meta.id);
-      const pending = feedback.filter((record2) => record2.deliveredAt === null).length;
+      const pending = feedback.filter((record) => record.deliveredAt === null).length;
       pendingFeedbackCount += pending;
       if (tag !== undefined && !meta.tags.some((entryTag) => entryTag.toLowerCase() === tag))
         continue;
@@ -1259,7 +1259,7 @@ class ArtifactStore {
       if (!meta.versions.some((version) => version.id === input.version)) {
         throw new StoreError("NOT_FOUND", "Version not found");
       }
-      const record2 = {
+      const record = {
         schema: 1,
         id: `fb_${randomHex(12)}`,
         artifactId: id,
@@ -1271,8 +1271,8 @@ class ArtifactStore {
       };
       const feedbackDir = path6.join(resolveArtifactDir(this.root, id), "feedback");
       await ensureDir(feedbackDir);
-      await writeJsonAtomic(path6.join(feedbackDir, `${record2.id}.json`), record2);
-      return record2;
+      await writeJsonAtomic(path6.join(feedbackDir, `${record.id}.json`), record);
+      return record;
     }, this.lockOptions());
   }
   async listFeedback(id, options = {}) {
@@ -1284,7 +1284,7 @@ class ArtifactStore {
     const records = await this.allFeedback(id, options.since);
     const offset = options.offset ?? 0;
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
-    return { responses: records.slice(offset, offset + limit), total: records.length, pending: records.filter((record2) => record2.deliveredAt === null).length };
+    return { responses: records.slice(offset, offset + limit), total: records.length, pending: records.filter((record) => record.deliveredAt === null).length };
   }
   async allFeedback(id, since) {
     await this.ensureInit();
@@ -1304,12 +1304,12 @@ class ArtifactStore {
         continue;
       try {
         const raw = await readJson(path6.join(feedbackDir, entry.name));
-        const record2 = parseFeedbackRecord(raw);
-        if (record2.artifactId !== id)
+        const record = parseFeedbackRecord(raw);
+        if (record.artifactId !== id)
           continue;
-        if (since !== undefined && record2.createdAt <= since)
+        if (since !== undefined && record.createdAt <= since)
           continue;
-        records.push(record2);
+        records.push(record);
       } catch {
         continue;
       }
@@ -1333,10 +1333,10 @@ class ArtifactStore {
         const feedbackPath = path6.join(feedbackDir, `${feedbackId}.json`);
         try {
           const raw = await readJson(feedbackPath);
-          const record2 = parseFeedbackRecord(raw);
-          if (record2.artifactId !== id || record2.deliveredAt !== null)
+          const record = parseFeedbackRecord(raw);
+          if (record.artifactId !== id || record.deliveredAt !== null)
             continue;
-          await writeJsonAtomic(feedbackPath, { ...record2, deliveredAt });
+          await writeJsonAtomic(feedbackPath, { ...record, deliveredAt });
           count += 1;
         } catch {
           continue;
@@ -1539,11 +1539,11 @@ class ArtifactStore {
         const current = await this.readVersion(id, meta.currentVersion);
         const targetPath = input.path ?? current.manifest.entry;
         assertRelativePath(targetPath);
-        const record2 = current.manifest.files.find((file) => file.path === targetPath);
-        if (record2 === undefined) {
+        const record = current.manifest.files.find((file) => file.path === targetPath);
+        if (record === undefined) {
           throw new StoreError("PATH_NOT_FOUND", "File not found in this version");
         }
-        if (!isTextMime(record2.mime)) {
+        if (!isTextMime(record.mime)) {
           throw new StoreError("UNSUPPORTED_FILE_TYPE", "Edits require a text file");
         }
         const target = current.files.find((file) => file.path === targetPath);
@@ -1627,7 +1627,7 @@ class ArtifactStore {
         });
         totalBytes += file.bytes.byteLength;
       }
-      const manifest2 = {
+      const manifest = {
         schema: 1,
         kind: input.kind,
         entry: input.entry,
@@ -1637,9 +1637,9 @@ class ArtifactStore {
         files: records,
         ...input.rendering ? { rendering: input.rendering } : {}
       };
-      await writeJsonDurable(path6.join(tempDir, "manifest.json"), manifest2);
+      await writeJsonDurable(path6.join(tempDir, "manifest.json"), manifest);
       await renameWithRetry(tempDir, path6.join(versionsDir, version));
-      return { id: version, manifest: manifest2, totalBytes };
+      return { id: version, manifest, totalBytes };
     } catch (error) {
       await fs5.rm(tempDir, { recursive: true, force: true });
       throw error;
@@ -1915,14 +1915,14 @@ function validateFileSet(kind, files, entry, limits) {
     throw new StoreError("INVALID_ARTIFACT", "Entry must be an HTML file");
   }
 }
-function summarizeVersion(id, manifest2, totalBytes) {
+function summarizeVersion(id, manifest, totalBytes) {
   return {
     id,
-    createdAt: manifest2.createdAt,
+    createdAt: manifest.createdAt,
     bytes: totalBytes,
-    files: manifest2.files.length,
-    title: manifest2.title,
-    restoredFrom: manifest2.restoredFrom
+    files: manifest.files.length,
+    title: manifest.title,
+    restoredFrom: manifest.restoredFrom
   };
 }
 function countOccurrences(haystack, needle) {
@@ -2235,19 +2235,19 @@ async function loadLibraries(directory) {
         continue;
       libraries[name] = { file: value.file, bytes: value.bytes, sha256: value.sha256 };
     }
-    const verified2 = {};
-    for (const [name, record2] of Object.entries(libraries)) {
+    const verified = {};
+    for (const [name, record] of Object.entries(libraries)) {
       try {
-        const bytes = await fs6.readFile(path8.join(directory, record2.file));
+        const bytes = await fs6.readFile(path8.join(directory, record.file));
         const hash = crypto3.createHash("sha256").update(bytes).digest("hex");
-        if (hash !== record2.sha256 || bytes.byteLength !== record2.bytes)
+        if (hash !== record.sha256 || bytes.byteLength !== record.bytes)
           continue;
-        verified2[name] = record2;
+        verified[name] = record;
       } catch {
         continue;
       }
     }
-    return { schema: 1, set: raw.set, libraries: verified2 };
+    return { schema: 1, set: raw.set, libraries: verified };
   } catch {
     return null;
   }
@@ -2266,8 +2266,8 @@ async function createViewerServer(options) {
   let lastActivity = now();
   let isClosed = false;
   let resolveClosed = null;
-  const closed = new Promise((resolve4) => {
-    resolveClosed = resolve4;
+  const closed = new Promise((resolve) => {
+    resolveClosed = resolve;
   });
   const server = http.createServer((request, response) => {
     lastActivity = now();
@@ -2297,8 +2297,8 @@ async function createViewerServer(options) {
         client.end();
     }
     sseClients.clear();
-    await new Promise((resolve4) => {
-      server.close(() => resolve4());
+    await new Promise((resolve) => {
+      server.close(() => resolve());
       server.closeAllConnections();
     });
     resolveClosed?.();
@@ -2316,14 +2316,14 @@ async function createViewerServer(options) {
     }
   }, Math.min(Math.max(Math.floor(idleMs / 2), 10), 60000));
   idleTimer.unref();
-  await new Promise((resolve4, reject) => {
+  await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, host, () => {
       const address = server.address();
       if (address !== null && typeof address === "object") {
         port = address.port;
       }
-      resolve4();
+      resolve();
     });
   });
   async function handleRequest(request, response) {
@@ -2500,12 +2500,12 @@ async function createViewerServer(options) {
     if (kind !== "html" && kind !== "bundle") {
       throw new HttpError(501, "UNSUPPORTED_KIND", `${kind} artifacts are not implemented yet`);
     }
-    const relative2 = rest.length === 0 ? result.manifest.entry : rest;
-    if (relative2 === result.manifest.entry || contentTypeFor(relative2).startsWith("text/html")) {
-      const bytes2 = await options.store.readFile(id, version, relative2);
+    const relative = rest.length === 0 ? result.manifest.entry : rest;
+    if (relative === result.manifest.entry || contentTypeFor(relative).startsWith("text/html")) {
+      const bytes = await options.store.readFile(id, version, relative);
       let html;
       try {
-        html = new TextDecoder("utf-8", { fatal: true }).decode(bytes2);
+        html = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
       } catch {
         throw new HttpError(500, "INVALID_ARTIFACT", "Entry is not valid UTF-8");
       }
@@ -2522,22 +2522,22 @@ async function createViewerServer(options) {
       source = `window.__canvasView = ${JSON.stringify(context)};
 ${source}`;
       const injected = injectRuntime(html, source, tags);
-      const headers2 = viewHeaders({ kind, host, port });
-      headers2["Content-Length"] = String(Buffer.byteLength(injected, "utf8"));
-      response.writeHead(200, headers2);
+      const headers = viewHeaders({ kind, host, port });
+      headers["Content-Length"] = String(Buffer.byteLength(injected, "utf8"));
+      response.writeHead(200, headers);
       response.end(injected);
       return;
     }
-    const bytes = await options.store.readFile(id, version, relative2);
+    const bytes = await options.store.readFile(id, version, relative);
     const headers = {
-      "Content-Type": contentTypeFor(relative2),
+      "Content-Type": contentTypeFor(relative),
       "Content-Length": String(bytes.byteLength),
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
       "Cross-Origin-Resource-Policy": "cross-origin",
       "Access-Control-Allow-Origin": "null"
     };
-    if (relative2.toLowerCase().endsWith(".svg")) {
+    if (relative.toLowerCase().endsWith(".svg")) {
       headers["Content-Security-Policy"] = "sandbox; default-src 'none'; style-src 'unsafe-inline'";
     }
     response.writeHead(200, headers);
@@ -2564,12 +2564,12 @@ ${source}`;
       throw new HttpError(404, "NOT_FOUND", "Not found");
     if (name.endsWith(".js"))
       name = name.slice(0, -3);
-    const library2 = libraries?.libraries[name];
-    if (library2 === undefined)
+    const library = libraries?.libraries[name];
+    if (library === undefined)
       throw new HttpError(404, "NOT_FOUND", "Library not found");
     let bytes;
     try {
-      bytes = await fs6.readFile(path8.join(options.librariesDir, library2.file));
+      bytes = await fs6.readFile(path8.join(options.librariesDir, library.file));
     } catch {
       throw new HttpError(404, "NOT_FOUND", "Library file not found");
     }
@@ -2645,8 +2645,8 @@ ${source}`;
       throw new HttpError(404, "NOT_FOUND", "Not found");
     if (action === "state") {
       if (request.method === "GET") {
-        const state2 = await options.store.readState(payload.id);
-        sendJson(response, 200, { state: state2 }, runtimeCorsHeaders());
+        const state = await options.store.readState(payload.id);
+        sendJson(response, 200, { state }, runtimeCorsHeaders());
         return;
       }
       if (request.method !== "POST") {
@@ -2674,12 +2674,12 @@ ${source}`;
         throw new HttpError(400, "INVALID_REQUEST", "data must be JSON");
       }
       const kind = typeof body.kind === "string" ? body.kind : "form";
-      const record2 = await options.store.addFeedback(payload.id, {
+      const record = await options.store.addFeedback(payload.id, {
         version: payload.version,
         kind,
         data: body.data
       });
-      sendJson(response, 200, { id: record2.id, createdAt: record2.createdAt }, runtimeCorsHeaders());
+      sendJson(response, 200, { id: record.id, createdAt: record.createdAt }, runtimeCorsHeaders());
       return;
     }
     if (request.method !== "POST") {

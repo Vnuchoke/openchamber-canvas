@@ -238,7 +238,7 @@ async function readJson(filePath) {
   }
 }
 function sleep(milliseconds) {
-  return new Promise((resolve2) => setTimeout(resolve2, milliseconds));
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 // src/store/id.ts
@@ -515,28 +515,28 @@ function isJsonValue(value, depth = 0) {
 function jsonByteLength(value) {
   return Buffer.byteLength(JSON.stringify(value) ?? "null", "utf8");
 }
-function requireString(record2, key, maxLength) {
-  const value = record2[key];
+function requireString(record, key, maxLength) {
+  const value = record[key];
   if (typeof value !== "string" || value.length === 0 || value.length > maxLength) {
     fail(`${key} must be a string of 1 to ${maxLength} characters`);
   }
   return value;
 }
-function requireInteger(record2, key, minimum, maximum) {
-  const value = record2[key];
+function requireInteger(record, key, minimum, maximum) {
+  const value = record[key];
   if (typeof value !== "number" || !Number.isInteger(value) || value < minimum || value > maximum) {
     fail(`${key} must be an integer from ${minimum} to ${maximum}`);
   }
   return value;
 }
-function requireBoolean(record2, key) {
-  const value = record2[key];
+function requireBoolean(record, key) {
+  const value = record[key];
   if (typeof value !== "boolean")
     fail(`${key} must be a boolean`);
   return value;
 }
-function nullableString(record2, key, maxLength) {
-  const value = record2[key];
+function nullableString(record, key, maxLength) {
+  const value = record[key];
   if (value === null)
     return null;
   if (typeof value !== "string" || value.length === 0 || value.length > maxLength) {
@@ -883,8 +883,8 @@ class ArtifactStore {
       if (existing !== null) {
         return withArtifactLock(this.lockPath(existing.id), async () => {
           const current = await this.getMeta(existing.id);
-          const manifest2 = await this.readManifest(existing.id, current.currentVersion);
-          if (manifest2.entry === entry && await this.hasSameFiles(existing.id, current.currentVersion, files)) {
+          const manifest = await this.readManifest(existing.id, current.currentVersion);
+          if (manifest.entry === entry && await this.hasSameFiles(existing.id, current.currentVersion, files)) {
             if (input.baseVersion !== undefined)
               this.assertBaseVersion(current, input.baseVersion, "metadata");
             const meta = { ...current, title, tags: input.tags === undefined ? current.tags : tags, updatedAt: this.now().toISOString() };
@@ -1026,8 +1026,8 @@ class ArtifactStore {
     if (!meta.versions.some((entry) => entry.id === versionId)) {
       throw new StoreError("NOT_FOUND", "Version not found");
     }
-    const manifest2 = await this.readManifest(id, versionId);
-    return { meta, version: versionId, manifest: manifest2 };
+    const manifest = await this.readManifest(id, versionId);
+    return { meta, version: versionId, manifest };
   }
   async readVersion(id, version) {
     const result = await this.read(id, version);
@@ -1040,12 +1040,12 @@ class ArtifactStore {
   }
   async readFile(id, version, filePath) {
     const result = await this.read(id, version);
-    const record2 = result.manifest.files.find((file) => file.path === filePath);
-    if (record2 === undefined) {
+    const record = result.manifest.files.find((file) => file.path === filePath);
+    if (record === undefined) {
       throw new StoreError("PATH_NOT_FOUND", "File not found in this version");
     }
     const versionDir = resolveVersionDir(this.root, id, result.version);
-    return this.readFileAt(versionDir, record2.path);
+    return this.readFileAt(versionDir, record.path);
   }
   async getMeta(id) {
     await this.ensureInit();
@@ -1106,7 +1106,7 @@ class ArtifactStore {
       for (const value of meta.tags)
         tags.add(value);
       const feedback = filter.trash ? [] : await this.allFeedback(meta.id);
-      const pending = feedback.filter((record2) => record2.deliveredAt === null).length;
+      const pending = feedback.filter((record) => record.deliveredAt === null).length;
       pendingFeedbackCount += pending;
       if (tag !== undefined && !meta.tags.some((entryTag) => entryTag.toLowerCase() === tag))
         continue;
@@ -1260,7 +1260,7 @@ class ArtifactStore {
       if (!meta.versions.some((version) => version.id === input.version)) {
         throw new StoreError("NOT_FOUND", "Version not found");
       }
-      const record2 = {
+      const record = {
         schema: 1,
         id: `fb_${randomHex(12)}`,
         artifactId: id,
@@ -1272,8 +1272,8 @@ class ArtifactStore {
       };
       const feedbackDir = path6.join(resolveArtifactDir(this.root, id), "feedback");
       await ensureDir(feedbackDir);
-      await writeJsonAtomic(path6.join(feedbackDir, `${record2.id}.json`), record2);
-      return record2;
+      await writeJsonAtomic(path6.join(feedbackDir, `${record.id}.json`), record);
+      return record;
     }, this.lockOptions());
   }
   async listFeedback(id, options = {}) {
@@ -1285,7 +1285,7 @@ class ArtifactStore {
     const records = await this.allFeedback(id, options.since);
     const offset = options.offset ?? 0;
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
-    return { responses: records.slice(offset, offset + limit), total: records.length, pending: records.filter((record2) => record2.deliveredAt === null).length };
+    return { responses: records.slice(offset, offset + limit), total: records.length, pending: records.filter((record) => record.deliveredAt === null).length };
   }
   async allFeedback(id, since) {
     await this.ensureInit();
@@ -1305,12 +1305,12 @@ class ArtifactStore {
         continue;
       try {
         const raw = await readJson(path6.join(feedbackDir, entry.name));
-        const record2 = parseFeedbackRecord(raw);
-        if (record2.artifactId !== id)
+        const record = parseFeedbackRecord(raw);
+        if (record.artifactId !== id)
           continue;
-        if (since !== undefined && record2.createdAt <= since)
+        if (since !== undefined && record.createdAt <= since)
           continue;
-        records.push(record2);
+        records.push(record);
       } catch {
         continue;
       }
@@ -1334,10 +1334,10 @@ class ArtifactStore {
         const feedbackPath = path6.join(feedbackDir, `${feedbackId}.json`);
         try {
           const raw = await readJson(feedbackPath);
-          const record2 = parseFeedbackRecord(raw);
-          if (record2.artifactId !== id || record2.deliveredAt !== null)
+          const record = parseFeedbackRecord(raw);
+          if (record.artifactId !== id || record.deliveredAt !== null)
             continue;
-          await writeJsonAtomic(feedbackPath, { ...record2, deliveredAt });
+          await writeJsonAtomic(feedbackPath, { ...record, deliveredAt });
           count += 1;
         } catch {
           continue;
@@ -1540,11 +1540,11 @@ class ArtifactStore {
         const current = await this.readVersion(id, meta.currentVersion);
         const targetPath = input.path ?? current.manifest.entry;
         assertRelativePath(targetPath);
-        const record2 = current.manifest.files.find((file) => file.path === targetPath);
-        if (record2 === undefined) {
+        const record = current.manifest.files.find((file) => file.path === targetPath);
+        if (record === undefined) {
           throw new StoreError("PATH_NOT_FOUND", "File not found in this version");
         }
-        if (!isTextMime(record2.mime)) {
+        if (!isTextMime(record.mime)) {
           throw new StoreError("UNSUPPORTED_FILE_TYPE", "Edits require a text file");
         }
         const target = current.files.find((file) => file.path === targetPath);
@@ -1628,7 +1628,7 @@ class ArtifactStore {
         });
         totalBytes += file.bytes.byteLength;
       }
-      const manifest2 = {
+      const manifest = {
         schema: 1,
         kind: input.kind,
         entry: input.entry,
@@ -1638,9 +1638,9 @@ class ArtifactStore {
         files: records,
         ...input.rendering ? { rendering: input.rendering } : {}
       };
-      await writeJsonDurable(path6.join(tempDir, "manifest.json"), manifest2);
+      await writeJsonDurable(path6.join(tempDir, "manifest.json"), manifest);
       await renameWithRetry(tempDir, path6.join(versionsDir, version));
-      return { id: version, manifest: manifest2, totalBytes };
+      return { id: version, manifest, totalBytes };
     } catch (error) {
       await fs5.rm(tempDir, { recursive: true, force: true });
       throw error;
@@ -1916,14 +1916,14 @@ function validateFileSet(kind, files, entry, limits) {
     throw new StoreError("INVALID_ARTIFACT", "Entry must be an HTML file");
   }
 }
-function summarizeVersion(id, manifest2, totalBytes) {
+function summarizeVersion(id, manifest, totalBytes) {
   return {
     id,
-    createdAt: manifest2.createdAt,
+    createdAt: manifest.createdAt,
     bytes: totalBytes,
-    files: manifest2.files.length,
-    title: manifest2.title,
-    restoredFrom: manifest2.restoredFrom
+    files: manifest.files.length,
+    title: manifest.title,
+    restoredFrom: manifest.restoredFrom
   };
 }
 function countOccurrences(haystack, needle) {
@@ -2015,25 +2015,25 @@ var x;
 var i;
 var hMap = function(cd, mb, r) {
   var s = cd.length;
-  var i2 = 0;
+  var i = 0;
   var l = new u16(mb);
-  for (;i2 < s; ++i2) {
-    if (cd[i2])
-      ++l[cd[i2] - 1];
+  for (;i < s; ++i) {
+    if (cd[i])
+      ++l[cd[i] - 1];
   }
   var le = new u16(mb);
-  for (i2 = 1;i2 < mb; ++i2) {
-    le[i2] = le[i2 - 1] + l[i2 - 1] << 1;
+  for (i = 1;i < mb; ++i) {
+    le[i] = le[i - 1] + l[i - 1] << 1;
   }
   var co;
   if (r) {
     co = new u16(1 << mb);
     var rvb = 15 - mb;
-    for (i2 = 0;i2 < s; ++i2) {
-      if (cd[i2]) {
-        var sv = i2 << 4 | cd[i2];
-        var r_1 = mb - cd[i2];
-        var v = le[cd[i2] - 1]++ << r_1;
+    for (i = 0;i < s; ++i) {
+      if (cd[i]) {
+        var sv = i << 4 | cd[i];
+        var r_1 = mb - cd[i];
+        var v = le[cd[i] - 1]++ << r_1;
         for (var m = v | (1 << r_1) - 1;v <= m; ++v) {
           co[rev[v] >> rvb] = sv;
         }
@@ -2041,9 +2041,9 @@ var hMap = function(cd, mb, r) {
     }
   } else {
     co = new u16(s);
-    for (i2 = 0;i2 < s; ++i2) {
-      if (cd[i2]) {
-        co[i2] = rev[le[cd[i2] - 1]++] >> 15 - cd[i2];
+    for (i = 0;i < s; ++i) {
+      if (cd[i]) {
+        co[i] = rev[le[cd[i] - 1]++] >> 15 - cd[i];
       }
     }
   }
@@ -2118,9 +2118,9 @@ var wbits16 = function(d, p, v) {
 };
 var hTree = function(d, mb) {
   var t = [];
-  for (var i2 = 0;i2 < d.length; ++i2) {
-    if (d[i2])
-      t.push({ s: i2, f: d[i2] });
+  for (var i = 0;i < d.length; ++i) {
+    if (d[i])
+      t.push({ s: i, f: d[i] });
   }
   var s = t.length;
   var t2 = t.slice();
@@ -2135,28 +2135,28 @@ var hTree = function(d, mb) {
     return a.f - b.f;
   });
   t.push({ s: -1, f: 25001 });
-  var l = t[0], r = t[1], i0 = 0, i1 = 1, i22 = 2;
+  var l = t[0], r = t[1], i0 = 0, i1 = 1, i2 = 2;
   t[0] = { s: -1, f: l.f + r.f, l, r };
   while (i1 != s - 1) {
-    l = t[t[i0].f < t[i22].f ? i0++ : i22++];
-    r = t[i0 != i1 && t[i0].f < t[i22].f ? i0++ : i22++];
+    l = t[t[i0].f < t[i2].f ? i0++ : i2++];
+    r = t[i0 != i1 && t[i0].f < t[i2].f ? i0++ : i2++];
     t[i1++] = { s: -1, f: l.f + r.f, l, r };
   }
   var maxSym = t2[0].s;
-  for (var i2 = 1;i2 < s; ++i2) {
-    if (t2[i2].s > maxSym)
-      maxSym = t2[i2].s;
+  for (var i = 1;i < s; ++i) {
+    if (t2[i].s > maxSym)
+      maxSym = t2[i].s;
   }
   var tr = new u16(maxSym + 1);
   var mbt = ln(t[i1 - 1], tr, 0);
   if (mbt > mb) {
-    var i2 = 0, dt = 0;
+    var i = 0, dt = 0;
     var lft = mbt - mb, cst = 1 << lft;
     t2.sort(function(a, b) {
       return tr[b.s] - tr[a.s] || a.f - b.f;
     });
-    for (;i2 < s; ++i2) {
-      var i2_1 = t2[i2].s;
+    for (;i < s; ++i) {
+      var i2_1 = t2[i].s;
       if (tr[i2_1] > mb) {
         dt += cst - (1 << mbt - tr[i2_1]);
         tr[i2_1] = mb;
@@ -2165,14 +2165,14 @@ var hTree = function(d, mb) {
     }
     dt >>= lft;
     while (dt > 0) {
-      var i2_2 = t2[i2].s;
+      var i2_2 = t2[i].s;
       if (tr[i2_2] < mb)
         dt -= 1 << mb - tr[i2_2]++ - 1;
       else
-        ++i2;
+        ++i;
     }
-    for (;i2 >= 0 && dt; --i2) {
-      var i2_3 = t2[i2].s;
+    for (;i >= 0 && dt; --i) {
+      var i2_3 = t2[i].s;
       if (tr[i2_3] == mb) {
         --tr[i2_3];
         ++dt;
@@ -2194,8 +2194,8 @@ var lc = function(c) {
   var w = function(v) {
     cl[cli++] = v;
   };
-  for (var i2 = 1;i2 <= s; ++i2) {
-    if (c[i2] == cln && i2 != s)
+  for (var i = 1;i <= s; ++i) {
+    if (c[i] == cln && i != s)
       ++cls;
     else {
       if (!cln && cls > 2) {
@@ -2215,15 +2215,15 @@ var lc = function(c) {
       while (cls--)
         w(cln);
       cls = 1;
-      cln = c[i2];
+      cln = c[i];
     }
   }
   return { c: cl.subarray(0, cli), n: s };
 };
 var clen = function(cf, cl) {
   var l = 0;
-  for (var i2 = 0;i2 < cl.length; ++i2)
-    l += cf[i2] * cl[i2];
+  for (var i = 0;i < cl.length; ++i)
+    l += cf[i] * cl[i];
   return l;
 };
 var wfblk = function(out, pos, dat) {
@@ -2233,23 +2233,23 @@ var wfblk = function(out, pos, dat) {
   out[o + 1] = s >> 8;
   out[o + 2] = out[o] ^ 255;
   out[o + 3] = out[o + 1] ^ 255;
-  for (var i2 = 0;i2 < s; ++i2)
-    out[o + i2 + 4] = dat[i2];
+  for (var i = 0;i < s; ++i)
+    out[o + i + 4] = dat[i];
   return (o + 4 + s) * 8;
 };
 var wblk = function(dat, out, final, syms, lf, df, eb, li, bs, bl, p) {
   wbits(out, p++, final);
   ++lf[256];
-  var _a2 = hTree(lf, 15), dlt = _a2.t, mlb = _a2.l;
-  var _b2 = hTree(df, 15), ddt = _b2.t, mdb = _b2.l;
-  var _c = lc(dlt), lclt = _c.c, nlc = _c.n;
-  var _d = lc(ddt), lcdt = _d.c, ndc = _d.n;
+  var _a = hTree(lf, 15), { t: dlt, l: mlb } = _a;
+  var _b = hTree(df, 15), { t: ddt, l: mdb } = _b;
+  var _c = lc(dlt), { c: lclt, n: nlc } = _c;
+  var _d = lc(ddt), { c: lcdt, n: ndc } = _d;
   var lcfreq = new u16(19);
-  for (var i2 = 0;i2 < lclt.length; ++i2)
-    ++lcfreq[lclt[i2] & 31];
-  for (var i2 = 0;i2 < lcdt.length; ++i2)
-    ++lcfreq[lcdt[i2] & 31];
-  var _e = hTree(lcfreq, 7), lct = _e.t, mlcb = _e.l;
+  for (var i = 0;i < lclt.length; ++i)
+    ++lcfreq[lclt[i] & 31];
+  for (var i = 0;i < lcdt.length; ++i)
+    ++lcfreq[lcdt[i] & 31];
+  var _e = hTree(lcfreq, 7), { t: lct, l: mlcb } = _e;
   var nlcc = 19;
   for (;nlcc > 4 && !lct[clim[nlcc - 1]]; --nlcc)
     ;
@@ -2267,24 +2267,24 @@ var wblk = function(dat, out, final, syms, lf, df, eb, li, bs, bl, p) {
     wbits(out, p + 5, ndc - 1);
     wbits(out, p + 10, nlcc - 4);
     p += 14;
-    for (var i2 = 0;i2 < nlcc; ++i2)
-      wbits(out, p + 3 * i2, lct[clim[i2]]);
+    for (var i = 0;i < nlcc; ++i)
+      wbits(out, p + 3 * i, lct[clim[i]]);
     p += 3 * nlcc;
     var lcts = [lclt, lcdt];
     for (var it = 0;it < 2; ++it) {
       var clct = lcts[it];
-      for (var i2 = 0;i2 < clct.length; ++i2) {
-        var len = clct[i2] & 31;
+      for (var i = 0;i < clct.length; ++i) {
+        var len = clct[i] & 31;
         wbits(out, p, llm[len]), p += lct[len];
         if (len > 15)
-          wbits(out, p, clct[i2] >> 5 & 127), p += clct[i2] >> 12;
+          wbits(out, p, clct[i] >> 5 & 127), p += clct[i] >> 12;
       }
     }
   } else {
     lm = flm, ll = flt, dm = fdm, dl = fdt;
   }
-  for (var i2 = 0;i2 < li; ++i2) {
-    var sym = syms[i2];
+  for (var i = 0;i < li; ++i) {
+    var sym = syms[i];
     if (sym > 255) {
       var len = sym >> 18 & 31;
       wbits16(out, p, lm[len + 257]), p += ll[len + 257];
@@ -2317,36 +2317,36 @@ var dflt = function(dat, lvl, plvl, pre, post, st) {
     var msk_1 = (1 << plvl) - 1;
     var prev = st.p || new u16(32768), head = st.h || new u16(msk_1 + 1);
     var bs1_1 = Math.ceil(plvl / 3), bs2_1 = 2 * bs1_1;
-    var hsh = function(i3) {
-      return (dat[i3] ^ dat[i3 + 1] << bs1_1 ^ dat[i3 + 2] << bs2_1) & msk_1;
+    var hsh = function(i) {
+      return (dat[i] ^ dat[i + 1] << bs1_1 ^ dat[i + 2] << bs2_1) & msk_1;
     };
     var syms = new i32(25000);
     var lf = new u16(288), df = new u16(32);
-    var lc_1 = 0, eb = 0, i2 = st.i || 0, li = 0, wi = st.w || 0, bs = 0;
-    for (;i2 + 2 < s; ++i2) {
-      var hv = hsh(i2);
-      var imod = i2 & 32767, pimod = head[hv];
+    var lc_1 = 0, eb = 0, i = st.i || 0, li = 0, wi = st.w || 0, bs = 0;
+    for (;i + 2 < s; ++i) {
+      var hv = hsh(i);
+      var imod = i & 32767, pimod = head[hv];
       prev[imod] = pimod;
       head[hv] = imod;
-      if (wi <= i2) {
-        var rem = s - i2;
+      if (wi <= i) {
+        var rem = s - i;
         if ((lc_1 > 7000 || li > 24576) && (rem > 423 || !lst)) {
-          pos = wblk(dat, w, 0, syms, lf, df, eb, li, bs, i2 - bs, pos);
-          li = lc_1 = eb = 0, bs = i2;
+          pos = wblk(dat, w, 0, syms, lf, df, eb, li, bs, i - bs, pos);
+          li = lc_1 = eb = 0, bs = i;
           for (var j = 0;j < 286; ++j)
             lf[j] = 0;
           for (var j = 0;j < 30; ++j)
             df[j] = 0;
         }
         var l = 2, d = 0, ch_1 = c, dif = imod - pimod & 32767;
-        if (rem > 2 && hv == hsh(i2 - dif)) {
+        if (rem > 2 && hv == hsh(i - dif)) {
           var maxn = Math.min(n, rem) - 1;
-          var maxd = Math.min(32767, i2);
+          var maxd = Math.min(32767, i);
           var ml = Math.min(258, rem);
           while (dif <= maxd && --ch_1 && imod != pimod) {
-            if (dat[i2 + l] == dat[i2 + l - dif]) {
+            if (dat[i + l] == dat[i + l - dif]) {
               var nl = 0;
-              for (;nl < ml && dat[i2 + nl] == dat[i2 + nl - dif]; ++nl)
+              for (;nl < ml && dat[i + nl] == dat[i + nl - dif]; ++nl)
                 ;
               if (nl > l) {
                 l = nl, d = dif;
@@ -2355,7 +2355,7 @@ var dflt = function(dat, lvl, plvl, pre, post, st) {
                 var mmd = Math.min(dif, nl - 2);
                 var md = 0;
                 for (var j = 0;j < mmd; ++j) {
-                  var ti = i2 - dif + j & 32767;
+                  var ti = i - dif + j & 32767;
                   var pti = prev[ti];
                   var cd = ti - pti & 32767;
                   if (cd > md)
@@ -2373,32 +2373,32 @@ var dflt = function(dat, lvl, plvl, pre, post, st) {
           eb += fleb[lin] + fdeb[din];
           ++lf[257 + lin];
           ++df[din];
-          wi = i2 + l;
+          wi = i + l;
           ++lc_1;
         } else {
-          syms[li++] = dat[i2];
-          ++lf[dat[i2]];
+          syms[li++] = dat[i];
+          ++lf[dat[i]];
         }
       }
     }
-    for (i2 = Math.max(i2, wi);i2 < s; ++i2) {
-      syms[li++] = dat[i2];
-      ++lf[dat[i2]];
+    for (i = Math.max(i, wi);i < s; ++i) {
+      syms[li++] = dat[i];
+      ++lf[dat[i]];
     }
-    pos = wblk(dat, w, lst, syms, lf, df, eb, li, bs, i2 - bs, pos);
+    pos = wblk(dat, w, lst, syms, lf, df, eb, li, bs, i - bs, pos);
     if (!lst) {
       st.r = pos & 7 | w[pos / 8 | 0] << 3;
       pos -= 7;
-      st.h = head, st.p = prev, st.i = i2, st.w = wi;
+      st.h = head, st.p = prev, st.i = i, st.w = wi;
     }
   } else {
-    for (var i2 = st.w || 0;i2 < s + lst; i2 += 65535) {
-      var e = i2 + 65535;
+    for (var i = st.w || 0;i < s + lst; i += 65535) {
+      var e = i + 65535;
       if (e >= s) {
         w[pos / 8 | 0] = lst;
         e = s;
       }
-      pos = wfblk(w, pos + 1, dat.subarray(i2, e));
+      pos = wfblk(w, pos + 1, dat.subarray(i, e));
     }
     st.i = s;
   }
@@ -2406,11 +2406,11 @@ var dflt = function(dat, lvl, plvl, pre, post, st) {
 };
 var crct = /* @__PURE__ */ function() {
   var t = new Int32Array(256);
-  for (var i2 = 0;i2 < 256; ++i2) {
-    var c = i2, k = 9;
+  for (var i = 0;i < 256; ++i) {
+    var c = i, k = 9;
     while (--k)
       c = (c & 1 && -306674912) ^ c >>> 1;
-    t[i2] = c;
+    t[i] = c;
   }
   return t;
 }();
@@ -2419,8 +2419,8 @@ var crc = function() {
   return {
     p: function(d) {
       var cr = c;
-      for (var i2 = 0;i2 < d.length; ++i2)
-        cr = crct[cr & 255 ^ d[i2]] ^ cr >>> 8;
+      for (var i = 0;i < d.length; ++i)
+        cr = crct[cr & 255 ^ d[i]] ^ cr >>> 8;
       c = cr;
     },
     d: function() {
@@ -2480,8 +2480,8 @@ try {
 function strToU8(str, latin1) {
   if (latin1) {
     var ar_1 = new u8(str.length);
-    for (var i2 = 0;i2 < str.length; ++i2)
-      ar_1[i2] = str.charCodeAt(i2);
+    for (var i = 0;i < str.length; ++i)
+      ar_1[i] = str.charCodeAt(i);
     return ar_1;
   }
   if (te)
@@ -2492,19 +2492,19 @@ function strToU8(str, latin1) {
   var w = function(v) {
     ar[ai++] = v;
   };
-  for (var i2 = 0;i2 < l; ++i2) {
+  for (var i = 0;i < l; ++i) {
     if (ai + 5 > ar.length) {
-      var n = new u8(ai + 8 + (l - i2 << 1));
+      var n = new u8(ai + 8 + (l - i << 1));
       n.set(ar);
       ar = n;
     }
-    var c = str.charCodeAt(i2);
+    var c = str.charCodeAt(i);
     if (c < 128 || latin1)
       w(c);
     else if (c < 2048)
       w(192 | c >> 6), w(128 | c & 63);
     else if (c > 55295 && c < 57344)
-      c = 65536 + (c & 1023 << 10) | str.charCodeAt(++i2) & 1023, w(240 | c >> 18), w(128 | c >> 12 & 63), w(128 | c >> 6 & 63), w(128 | c & 63);
+      c = 65536 + (c & 1023 << 10) | str.charCodeAt(++i) & 1023, w(240 | c >> 18), w(128 | c >> 12 & 63), w(128 | c >> 6 & 63), w(128 | c & 63);
     else
       w(224 | c >> 12), w(128 | c >> 6 & 63), w(128 | c & 63);
   }
@@ -2523,7 +2523,7 @@ var exfl = function(ex) {
   return le;
 };
 var wzh = function(d, b, f, fn, u, c, ce, co) {
-  var fl2 = fn.length, ex = f.extra, col = co && co.length;
+  var fl = fn.length, ex = f.extra, col = co && co.length;
   var exl = exfl(ex);
   wbytes(d, b, ce != null ? 33639248 : 67324752), b += 4;
   if (ce != null)
@@ -2540,7 +2540,7 @@ var wzh = function(d, b, f, fn, u, c, ce, co) {
     wbytes(d, b + 4, c < 0 ? -c - 2 : c);
     wbytes(d, b + 8, f.size);
   }
-  wbytes(d, b + 12, fl2);
+  wbytes(d, b + 12, fl);
   wbytes(d, b + 14, exl), b += 16;
   if (ce != null) {
     wbytes(d, b, col);
@@ -2548,7 +2548,7 @@ var wzh = function(d, b, f, fn, u, c, ce, co) {
     wbytes(d, b + 10, ce), b += 14;
   }
   d.set(fn, b);
-  b += fl2;
+  b += fl;
   if (exl) {
     for (var k in ex) {
       var exf = ex[k], l = exf.length;
@@ -2577,7 +2577,7 @@ function zipSync(data, opts) {
   var o = 0;
   var tot = 0;
   for (var fn in r) {
-    var _a2 = r[fn], file = _a2[0], p = _a2[1];
+    var _a = r[fn], file = _a[0], p = _a[1];
     var compression = p.level == 0 ? 0 : 8;
     var f = strToU8(fn), s = f.length;
     var com = p.comment, m = com && strToU8(com), ms = m && m.length;
@@ -2601,8 +2601,8 @@ function zipSync(data, opts) {
     tot += 76 + 2 * (s + exl) + (ms || 0) + l;
   }
   var out = new u8(tot + 22), oe = o, cdl = tot - o;
-  for (var i2 = 0;i2 < files.length; ++i2) {
-    var f = files[i2];
+  for (var i = 0;i < files.length; ++i) {
+    var f = files[i];
     wzh(out, f.o, f, f.f, f.u, f.c.length);
     var badd = 30 + f.f.length + exfl(f.extra);
     out.set(f.c, f.o + badd);
@@ -2928,8 +2928,8 @@ async function createServiceServer(options) {
   let port = options.port ?? 0;
   let isClosed = false;
   let resolveClosed = null;
-  const closed = new Promise((resolve3) => {
-    resolveClosed = resolve3;
+  const closed = new Promise((resolve) => {
+    resolveClosed = resolve;
   });
   const startedAt = Date.now();
   const server = http.createServer((request, response) => {
@@ -2957,19 +2957,19 @@ async function createServiceServer(options) {
     if (isClosed)
       return;
     isClosed = true;
-    await new Promise((resolve3) => {
-      server.close(() => resolve3());
+    await new Promise((resolve) => {
+      server.close(() => resolve());
       server.closeAllConnections();
     });
     resolveClosed?.();
   };
-  await new Promise((resolve3, reject) => {
+  await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, host, () => {
       const address = server.address();
       if (address !== null && typeof address === "object")
         port = address.port;
-      resolve3();
+      resolve();
     });
   });
   async function handleRequest(request, response) {
@@ -3179,9 +3179,9 @@ async function exportArtifact(store, storeRoot, id, version, requestedFormat) {
     if (entry === undefined) {
       throw new StoreError("ENTRY_NOT_FOUND", "The entry file is missing");
     }
-    const target2 = path9.join(exportsDir, `${id}-${result.version}.html`);
-    await fs7.writeFile(target2, entry.content, { mode: 384 });
-    return { path: target2, format, bytes: entry.content.byteLength };
+    const target = path9.join(exportsDir, `${id}-${result.version}.html`);
+    await fs7.writeFile(target, entry.content, { mode: 384 });
+    return { path: target, format, bytes: entry.content.byteLength };
   }
   const entries = {};
   for (const file of result.files) {

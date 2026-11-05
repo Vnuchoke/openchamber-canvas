@@ -859,13 +859,13 @@
           listener(snapshot);
       }),
       onRunningShells: (scope, listener) => subscribeShells(scope, listener),
-      readShellOutput: async (shellId, options2) => {
+      readShellOutput: async (shellId, options) => {
         requireIdentity(shellId, GUEST_SHELL_ID_MAX);
-        const cursor = options2?.cursor;
+        const cursor = options?.cursor;
         if (cursor !== undefined && (!Number.isInteger(cursor) || cursor < 0)) {
           throw new HostRequestError("HOST_REJECTED", "Shell output cursor must be a non-negative integer.");
         }
-        const tailBytes = options2?.tailBytes;
+        const tailBytes = options?.tailBytes;
         if (tailBytes !== undefined && (!Number.isInteger(tailBytes) || tailBytes < 1 || tailBytes > GUEST_SHELL_OUTPUT_TAIL_MAX)) {
           throw new HostRequestError("HOST_REJECTED", `Shell output tailBytes must be an integer between 1 and ${GUEST_SHELL_OUTPUT_TAIL_MAX}.`);
         }
@@ -888,30 +888,30 @@
         await request({ ...envelope, type: "open-session", id: nextId(ids), payload: { sessionId } });
       },
       storage: {
-        get: async (key, options2) => {
-          const scope = deviceStorageScope(options2);
+        get: async (key, options) => {
+          const scope = deviceStorageScope(options);
           const payload = { op: "get", key };
           if (scope)
             payload.scope = scope;
           const result = await storage(payload);
           return result.op === "get" && result.found ? result.value : undefined;
         },
-        set: async (key, value, options2) => {
-          const scope = deviceStorageScope(options2);
+        set: async (key, value, options) => {
+          const scope = deviceStorageScope(options);
           const payload = { op: "set", key, value };
           if (scope)
             payload.scope = scope;
           await storage(payload);
         },
-        delete: async (key, options2) => {
-          const scope = deviceStorageScope(options2);
+        delete: async (key, options) => {
+          const scope = deviceStorageScope(options);
           const payload = { op: "delete", key };
           if (scope)
             payload.scope = scope;
           await storage(payload);
         },
-        keys: async (options2) => {
-          const scope = deviceStorageScope(options2);
+        keys: async (options) => {
+          const scope = deviceStorageScope(options);
           const payload = { op: "keys" };
           if (scope)
             payload.scope = scope;
@@ -1843,10 +1843,10 @@ ${GUEST_UI_LOOK_CSS}`;
     let props = initial;
     const node = el("span", "oc-sdk oc-sdk-spinner");
     node.setAttribute("role", "status");
-    const ring2 = el("span", "oc-sdk-spinner-ring");
-    ring2.setAttribute("aria-hidden", "true");
+    const ring = el("span", "oc-sdk-spinner-ring");
+    ring.setAttribute("aria-hidden", "true");
     const label = el("span");
-    node.append(ring2, label);
+    node.append(ring, label);
     root.append(node);
     const paint = () => {
       node.dataset.size = props.size ?? "default";
