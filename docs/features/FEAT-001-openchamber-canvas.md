@@ -6,9 +6,9 @@ status: active
 implementation_status: shipped_unverified
 owner: Parth
 created: 2026-10-23
-last_updated: 2026-11-01
+last_updated: 2026-11-02
 last_verified_commit: null
-version: 2.1.0
+version: 2.2.0
 tags:
   - openchamber
   - extension
@@ -33,12 +33,14 @@ The [native OpenCode plugin replacement](#38-native-opencode-plugin-replacement)
 
 The [bundled Canvas authoring skill](#39-bundled-canvas-authoring-skill) ships in package 0.4.0. Native skill loading, lifecycle, relocated distribution, and existing regression checks are covered. The installed preview build was reported working; actual model selection and authoring-speed comparisons remain unverified.
 
+The [artifact design system](#40-artifact-design-system) ships in package 0.5.0. It adds the project-first fallback, the reference example, and the per-view Light/Dark switcher, with AC-080 and AC-081.
+
 ## 1. Feature Snapshot
 
 | Field | Details |
 |---|---|
 | Document status | Active |
-| Implementation status | 0.4.0 bundled authoring skill built; user-reported working; model-selection trials pending |
+| Implementation status | 0.5.0 artifact design system and 0.4.0 bundled authoring skill built; user-reported working; model-selection trials pending |
 | Owner | Parth |
 | Primary actors | User, OpenCode agent, gallery extension, extension service, viewer daemon, native plugin, browser panel |
 | Trigger | The agent publishes or updates an artifact, or the user opens the gallery |
@@ -47,7 +49,7 @@ The [bundled Canvas authoring skill](#39-bundled-canvas-authoring-skill) ships i
 | Data stores | `~/.config/openchamber/artifacts` on the machine that runs OpenChamber |
 | External systems | OpenChamber extension host, OpenChamber browser panel, OpenCode plugin host |
 | Feature flag | None in v1 |
-| Last verified | Typecheck and the browser suite pass against this working tree. Native regressions include relocated packages, session lookup, cancellation, and actual OpenCode cold-start viewing. The browser suite covers sandboxing, fixed/following views, drafts, feedback, and native Setup at eight widths in both themes. Model selection, permission rejection, native tool cards, and desktop routing remain manual acceptance. Verification ran against the working tree before the 0.4.0 release commit; no separate verified commit is recorded. |
+| Last verified | Typecheck and the browser suite pass against this working tree. Native regressions include relocated packages, session lookup, cancellation, and actual OpenCode cold-start viewing. The browser suite covers sandboxing, fixed/following views, drafts, feedback, native Setup at eight widths in both themes, and the design-system example in light and dark. Model selection, permission rejection, native tool cards, and desktop routing remain manual acceptance. Verification ran against the working tree before the 0.5.0 release commit; no separate verified commit is recorded. |
 
 ### At a Glance
 
@@ -2685,7 +2687,7 @@ Status: Inferred. The user approved the detailed plan, and the bundled skill shi
 
 When the user loads the Canvas OpenCode plugin, OpenCode also discovers `canvas-authoring` through its native skill registry. An agent can load it through the existing skill tool before creating or revising an artifact. No global skill installation, additional Canvas tool, extra extension permission, configuration writer, or backend change is needed.
 
-The skill guides efficient authoring, not general document creation or an entire design process. It explains output selection, reuse of the shipped examples, one canonical source file, project-confined `filePath` publication, Canvas runtime and sandbox constraints, bounded verification, safe revisions, and feedback handoff. It must respect user instructions and stronger project verification rules. It does not force every static report to simulate application loading/error states or require a new application scaffold.
+The skill guides efficient authoring, not general document creation or an entire design process. It explains output selection, reuse of the shipped examples, one canonical source file, project-confined `filePath` publication, a preflight self-check before the first publish, one complete publish for a new artifact, Canvas runtime and sandbox constraints, bounded verification with a stop condition, batched corrections after a concrete runtime failure, safe revisions, and feedback handoff. It must respect user instructions and stronger project verification rules. It does not force every static report to simulate application loading/error states or require a new application scaffold.
 
 Tool and skill descriptions guide early loading. They do not enforce tool order or prove that the agent followed the skill. Automatic model selection, reduced generation time, installed OpenChamber acceptance, and output-quality improvement require separate agent-loop evidence and must not be claimed from registration tests.
 
@@ -2721,7 +2723,7 @@ The plugin uses `packageRoot()` to resolve the skill from the installed package,
 |---|---|
 | Bundled authoring guidance | `skills/canvas-authoring/SKILL.md`; workflow, metadata, and relative links to existing examples |
 | Native skill and tool discovery | `src/plugin/index.ts`, generated `plugin/index.js`; `setup` reads the asset, registers its metadata/body/path, guides early loading, and disposes both registrations |
-| Deterministic contracts | `tests/skill.test.ts`; guidance/resource/metadata/documentation assertions and review-case presence |
+| Deterministic contracts | `tests/skill.test.ts`; guidance/resource/metadata/documentation assertions, the preflight/publish-once/stop contract, and review-case presence |
 | Lifecycle and installed-package checks | `tests/plugin.test.ts`, `tests/fixtures/plugin-host.mjs`, `tests/fixtures/native-observer.mjs`; missing asset, unload/reload, relocated publishing, and actual built-in skill loading |
 | Unexecuted authoring trials | `skills/canvas-authoring/evals/`; chart, static report, and seeded existing-artifact revision prompts with expected outcomes |
 
@@ -2736,6 +2738,11 @@ Every added test names its criterion ID. Deterministic criteria have automated e
 | AC-076 | The normal OpenCode skill tool loads the registered skill and returns its authoring content in an isolated actual server. Namespace/publish/update descriptions direct the agent to load it before writing or revising source. No new tool or forced call-order gate is introduced. | `tests/plugin.test.ts`, `tests/fixtures/native-observer.mjs`; assertions on descriptions and built-in skill output |
 | AC-077 | The shipped skill covers output routing, one canonical source, shipped examples, no CDN, bundled libraries, Canvas storage/feedback, actual-view verification, existing project checks, read-before-update/baseVersion, conflict rereads, and feedback review. All referenced resources exist; metadata and registered description agree. | `tests/skill.test.ts`; the read response's `version` is explicitly mapped to update `baseVersion`; three review prompts exist but are unexecuted |
 | AC-078 | Existing operation, viewer, sandbox, and distribution tests still pass. The package adds no permissions or runtime SDK dependency and writes no external configuration. README explains bundled skill discovery after plugin registration and does not promise automatic loading or faster generation. | Existing unit/browser suites; package and documentation assertions in `tests/plugin.test.ts` and `tests/skill.test.ts`; independent review |
+| AC-079 | The shipped skill directs the agent to complete a source preflight before the first publish, publish one complete artifact for a new artifact, batch concrete runtime fixes into one update, and stop unless the user asks for another change or a new defect appears. The namespace, publish, and update descriptions carry the preflight and one-publish rule, and the review expectations match. The old publish-first wording is absent. | `tests/skill.test.ts` |
+
+### Publish-as-preview correction
+
+On 2026-11-02, the artifact store showed recent artifacts gaining two or three versions in one authoring pass, with one-line changes between them. The skill's instruction to publish the first coherent version and then fix failures through `canvas_update` encouraged using Canvas as the verification surface. AC-079 tightens the contract: complete a source preflight, publish one complete artifact, verify the actual view once, batch concrete fixes into one update, and stop unless the user asks for another change or a new defect appears. Tool descriptions carry the same rule because skill loading is not guaranteed.
 
 ### Completed implementation phases
 
@@ -2744,10 +2751,13 @@ Every added test names its criterion ID. Deterministic criteria have automated e
 3. Extended the existing relocated-installation test and real-OpenCode observer to load the normal skill tool and verify content/path behavior. Existing publish/cold-start checks remain in place. Both relocated child invocations use explicitly isolated viewer paths.
 4. Updated `README.md`, `examples/README.md`, platform research, this feature document/index, and packaging conventions in `AGENTS.md`. Rebuilt distribution files and set the package version to 0.4.0 for this release.
 5. Ran the existing typecheck, lint, unit, browser, and build commands and obtained independent review. No UI was changed; browser suites remain regression evidence, not proof of agent selection.
+6. On 2026-11-02, tightened the skill and tool descriptions after the store showed repeated two- and three-version passes within one authoring run. Added a preflight checklist, one-publish rule, batched correction rule, and stop condition; updated review expectations and contract tests.
 
 ### Verification and remaining acceptance
 
 On 2026-11-01, `bun run typecheck`, `bun run lint`, `bun test`, `bun run test:browser`, and `bun run build` passed. The unit suite has 97 passing tests and no failures or skips, including real OpenCode 2.2.5 skill loading and cold-start viewing. The lifecycle test failed before implementation because no skill was registered. A focused instruction-contract test also failed before correcting the read-response field name.
+
+On 2026-11-02, the preflight/publish-once guidance change passed `bun run typecheck`, `bun run lint`, `bun test` (98 passing), `bun run build`, and `bun run test:browser`. The browser suite repeated the gallery/status and real viewer/example checks in light and dark. The contract test covers the skill and tool-description wording, not model behavior: actual model selection and whether the churn drops in real authoring runs remain unmeasured. The observed store still contains the earlier multi-version artifacts; no artifact data was changed.
 
 The browser suite passed gallery/status, real viewer/native tools, and all three authoring examples. Its overflow, token, label/24px accessibility, semantics, and layout gates passed in light and dark at 320, 375, 390, 768, 1024, 1280, 1440, and 2048px. Rendered Setup snapshots were inspected at 390, 1280, and 2048px in both themes. These checks use the repository's Playwright/Chrome harness, not an unavailable `browser.capture` tool, and do not certify full contrast or 44px touch targets.
 
@@ -2760,6 +2770,7 @@ The user installed the preview build and reported it working. Remaining acceptan
 ### Changelog
 
 - 2026-11-01: Bundled and registered Canvas authoring guidance through the native skill registry, added installed-package/lifecycle/contract coverage and three unexecuted authoring review cases, and guided early loading without enforcing tool order. Released as package 0.4.0. No store migration.
+- 2026-11-02: Tightened the skill, namespace, publish/update descriptions, and review expectations around preflight, one complete publish, batched corrections, and a stop condition after observed publish-as-preview churn. No package version or store change.
 
 ### Risks, fallback, and rollback
 
@@ -2769,3 +2780,55 @@ The user installed the preview build and reported it working. Remaining acceptan
 - R-SKILL-04: A skill may increase work rather than reduce it. Keep it focused, reuse existing examples, and separate deterministic contract checks from the three human-reviewed task prompts. Timing or quality claims require measured with/without-skill runs; those are not implied by passing unit tests.
 
 Rollback removes the skill registration, bundled guidance, and discovery wording from the package. It does not touch artifact data or user configuration. No commit, push, release, installation, or external configuration edit is authorized by this plan.
+
+## 40. Artifact design system
+
+Status: Inferred. The user approved a project-first fallback and an Anthropic-inspired editorial direction. The reference example ships in package 0.5.0; the chart, diagram, and mockup examples remain focused technical references rather than being restyled in this pass.
+
+### Outcome and scope
+
+Canvas artifacts need a coherent visual language even when the host project has no design system. The authoring skill tells the agent to inspect the project first for CSS custom properties, Tailwind or theme config, component styles, Storybook, or design documentation. When one exists, the agent maps its tokens and primitives into the self-contained artifact. When none exists, it starts from `examples/design-system.html` and keeps one system per artifact.
+
+The fallback defines warm neutral light and dark tokens, an editorial serif display with a system sans body, semantic state colors, surfaces, controls, tables, badges, callouts, and a visible Light/Dark switcher. The switcher is seeded from the viewer's `data-theme` and remains per-view; it does not persist a preference that overrides the host. The artifact stays self-contained: no CDN, remote font, external image, or gallery SDK control.
+
+### Direction
+
+The default is Anthropic-inspired editorial, not a copy of Anthropic's interface. Warm paper ground, deep ink, a restrained rust accent, a serif display voice, a workhorse system sans, quiet one-pixel rules, modest radii, and soft offset shadows. The palette is restrained: warm neutrals plus one accent, with success, warning, and danger used only for meaning. The reference avoids a hero-metric page, eyebrow labels, colored left rails, gradient text, and cards as the page structure.
+
+### Architecture and data flow
+
+The feature adds no runtime API, store field, tool, permission, or viewer endpoint. The native plugin already ships the skill and examples. The authoring guidance points to the reference, and the artifact carries its own CSS and switcher script. The viewer continues to set the initial `data-theme`; the artifact reads it and updates the root attribute when the user switches. The example is served through the existing sandbox and viewer path.
+
+### Implementation map
+
+| Area | Files and responsibilities |
+|---|---|
+| Authoring guidance | `skills/canvas-authoring/SKILL.md`; project-first design-system detection, fallback link, theme-switcher rule, preflight |
+| Fallback reference | `examples/design-system.html`; tokens, type, surfaces, controls, data, theme switcher |
+| Design documentation | `docs/design/artifact-design-system.md`; token table, primitives, constraints, verification |
+| Contract and browser coverage | `tests/skill.test.ts`, `tests/browser/examples.browser.ts`, `tests/plugin.test.ts`; link/resource assertions, real-viewer theme switch, relocated example presence |
+| User-facing docs | `README.md`, `examples/README.md`, `docs/features/README.md`, `AGENTS.md`; discoverability and constraints |
+
+### Acceptance criteria and tests
+
+| ID | Observable criterion | Validation |
+|---|---|---|
+| AC-080 | The shipped skill tells the agent to inspect and use the project's design system first, falls back to `examples/design-system.html` when none exists, keeps one system per artifact, and requires light/dark tokens plus a visible switcher seeded from the viewer's theme. The referenced example exists and the skill stays under its size limit. | `tests/skill.test.ts` |
+| AC-081 | The fallback example loads through the built viewer in light and dark with no outside requests or script errors. Its table and primitives render, the switcher is seeded from the viewer theme, computed light/dark tokens render, and keyboard activation updates `data-theme` and `aria-pressed`. The relocated package includes the example. | `tests/browser/examples.browser.ts`, `tests/plugin.test.ts` |
+
+### Verification
+
+On 2026-11-02, `bun run typecheck`, `bun run lint`, `bun test` (98 passing), `bun run build`, and `bun run test:browser` passed. The browser suite serves `design-system.html` through the built viewer in light and dark, checks the table, the seeded switcher state, the keyboard switch, and the computed page and surface tokens, and fails on outside requests or script errors. The example was inspected at 390, 900, and 1440 px in both themes. The mechanical detector reported only the warm cream ground as a common AI surface; that ground is the approved Anthropic-inspired direction, not an accidental default. The table padding finding was fixed. The relocated-package test includes the new example. This verifies the reference and the contract, not how a model will apply the system to a new artifact.
+
+### Changelog
+
+- 2026-11-02: Added the project-first artifact design system, the Anthropic-inspired fallback example, the Light/Dark switcher contract, design documentation, and browser/relocated-package coverage. Released as package 0.5.0. No runtime API or store change.
+
+### Risks, fallback, and rollback
+
+- R-DESIGN-01: A model can ignore the project system and copy the fallback. Keep the project-first instruction in the skill and test the referenced contract; actual model selection remains a separate authoring review.
+- R-DESIGN-02: A switch that persists its theme can override the viewer and make a requested light or dark view misleading. Keep the switch per-view and do not write a theme preference that outlives the open page.
+- R-DESIGN-03: A default can turn into a house style that overwhelms the project's own language. Use the fallback only when no project system exists, and never mix partial project tokens with it.
+- R-DESIGN-04: Remote fonts or copied gallery controls would break the sandbox and the app's visual boundary. Keep fonts local, use the system stacks in the fallback, and do not import the gallery SDK styles.
+
+Rollback removes the skill section, the reference example, the design document, and the new test coverage. It does not touch artifact data, the store, the viewer, or user configuration.

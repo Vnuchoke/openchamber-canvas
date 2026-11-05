@@ -17,12 +17,21 @@ Produce a useful artifact without repeated setup, duplicated source, or open-end
 
 Read only the example relevant to the task, not the whole repository:
 
+- [Design system](../../examples/design-system.html) is the default tokens-and-primitives reference when the project has none.
 - [Chart](../../examples/chart.html) uses bundled Chart.js and one dataset for the drawing and table.
 - [Diagram](../../examples/diagram.html) derives focused views, flow tables, and selection details from one graph.
 - [Mockup](../../examples/mockup.html) demonstrates form validation, persistent preferences, and structured feedback.
 - [Authoring reference](../../examples/README.md) explains publication and revision contracts.
 
-Reuse the structure or runtime pattern that fits. Do not copy unrelated sample content, invent metrics, or add a framework, build system, or local server for a self-contained page. Label sample data when the user requests a mockup. Reuse project design tokens when provided.
+Reuse the structure or runtime pattern that fits. Do not copy unrelated sample content, invent metrics, or add a framework, build system, or local server for a self-contained page. Label sample data when the user requests a mockup.
+
+## Use the project's design system
+
+Before styling the artifact, inspect the project for its design language: CSS custom properties, Tailwind or theme config, component styles, Storybook, or design documentation. Use its colors, type, spacing, radii, shadows, and motion. Map them into the artifact's own semantic tokens and keep the artifact self-contained. If the project has local font or image assets, include them as bundle files or embed them; do not add a remote font or CDN dependency.
+
+If the project has no design system, start from the Canvas default in `../../examples/design-system.html` and keep its tokens and primitives. Do not mix a partial project system with the default. One system per artifact. Do not copy the gallery's SDK controls; the artifact has its own visual language.
+
+Every new artifact declares light and dark tokens and includes a visible Light/Dark switcher in its header. Seed it from `document.documentElement.dataset.theme`, which the viewer sets, and update `data-theme` and `aria-pressed` when the user switches. Do not use `localStorage`. Use a per-view switch rather than a stored theme that overrides the host. Check both themes in the real viewer.
 
 ## Keep one source
 
@@ -42,13 +51,30 @@ For small HTML already composed in memory, `html` is supported. Do not create a 
 - Keep charts and diagrams readable through labels and a textual equivalent. Derive the drawing and table from the same data. Label controls, provide keyboard access and visible focus, and allow long content to wrap.
 - Add loading, empty, error, and pending states where the artifact actually loads data or performs an action. Do not build fake application states into a static report.
 
-## Publish and verify once in the real runtime
+## Preflight before publishing
 
-Check the requested content and source first. Publish the first coherent version, then open its returned `viewUrl` with the available browser tool. Publication saves a version; it does not prove that version works. A standalone preview can help during authoring, but cannot verify Canvas's injected libraries, storage, feedback, or sandbox behavior.
+Finish the artifact before it reaches Canvas. `canvas_publish` is not a preview, draft, or iteration surface: every changed publication stores a version. Do not call it to see how the page looks.
+
+Review the source against this checklist before the first publish:
+
+- The output belongs in Canvas. Use `openchamber_render` for a visual that belongs only in the chat reply.
+- One canonical source, local assets, and no CDN, remote font, external image, or open-network request.
+- Declared `libraries`, `data-theme` support, and a textual equivalent for every chart or diagram.
+- A project design system is used when present; otherwise the Canvas default tokens and primitives are used. Light and dark are defined, and the theme switcher is present.
+- Accessible labels, visible focus, keyboard access, and wrapping for long content.
+- `type="button"` actions with validation, pending, success, and retry states where the artifact performs an action.
+- Drawing, labels, table, and details derived from one dataset. No invented values or fake application states.
+- No secrets, credentials, or real customer data.
+
+Fix every concrete issue in the source now. If an item cannot be satisfied, state the limit instead of publishing a known-broken draft. Existing project verification gates still take precedence.
+
+## Publish once, then verify the real runtime
+
+Publish one complete artifact and open its returned `viewUrl` once. Publication stores a new version; it does not prove that version works. A standalone preview can help with layout, but cannot verify Canvas's injected libraries, storage, feedback, or sandbox behavior.
 
 Use the project's required viewport and theme checks. If none are specified, inspect a narrow and a wide view in light and dark themes. Check overflow first, then readability, labels/keyboard access, and the interactions the artifact actually has. Check for script/resource errors. For charts, compare plotted values with their table; for forms, test validation, pending state, and feedback/storage behavior that was requested.
 
-Fix observed failures through `canvas_update` on the same artifact. Do not repeat a second complete local-preview review before checking the real viewer, republish duplicates, or keep restyling an acceptable result without a concrete defect or user request. Existing project verification gates still take precedence.
+Batch all concrete failures from that pass into one `canvas_update` on the same artifact. Do not chain cosmetic updates, republish duplicates, or keep restyling an acceptable result. Stop when the request is met and the actual view passes. Another update needs a new user request or a new concrete defect. Existing project verification gates still take precedence.
 
 If the browser is unavailable, say the artifact was saved but rendering or interactions remain unverified. Do not claim checks that did not run or start installing browser infrastructure without approval. If publication succeeded but returned viewer warnings, preserve the artifact ID and report the opening problem rather than blindly publishing again.
 
@@ -56,7 +82,7 @@ If the browser is unavailable, say the artifact was saved but rendering or inter
 
 1. Use the supplied artifact ID, or find it with `canvas_list`. Call `canvas_read` to get the current source and `version` before editing. Use `path` or `includeFiles` when the relevant source is in a bundle.
 2. If a local source copy is stale, refresh it from the stored source before editing. Keep that canonical file synchronized. Make the requested change without redesigning unrelated sections.
-3. Call `canvas_update` with the read response's `version` as `baseVersion` and the edited `filePath`, bundle files, or precise `edits`. Metadata-only updates need no HTML. Do not create a new artifact for a revision.
+3. Batch all requested changes into one update. Call `canvas_update` with the read response's `version` as `baseVersion` and the edited `filePath`, bundle files, or precise `edits`. Metadata-only updates need no HTML. Do not create a new artifact for a revision, and do not publish an intermediate draft.
 4. On a version conflict, read again and reconcile the newer source. Do not blindly retry a replacement against a different base. Recheck the changed behavior and relevant regression checks in the actual viewer.
 
 Read submitted choices with `canvas_result` when the user asks you to act on feedback. The gallery's Add feedback to chat action inserts a draft for user review; it does not send it or prove an agent read it. Do not poll indefinitely for feedback or send a message on the user's behalf.
